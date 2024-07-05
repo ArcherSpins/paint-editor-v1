@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas</title>
+    <style>
+        #canvas {
+            border: 1px solid black;
+            border-radius: 6px;
+        }
+
+        *:not(input) {
+            color: white;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        button, input {
+            display: block;
+            margin-bottom: 15px;
+        }
+
+        .flex {
+            display: flex;
+        }
+
+        .editor {
+            padding-left: 10px;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgb(43, 43, 43);
+        }
+
+        #range_output {
+            width: 100px;
+            border: 1px solid gray;
+            margin-left: 10px;
+            border-radius: 4px;
+            padding: 4px 8px;
+            outline: none;
+        }
+
+        label {
+            font-size: 14px;
+        }
+
+        #color{
+            border-radius: 50%;
+            height: 60px;
+            width: 60px;
+            border: none;
+            outline: none;
+            appearance: none;
+        }
+
+        #color::-webkit-color-swatch-wrapper {
+            padding: 0; 
+        }
+        #color::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+
+        #clear {
+            background-color: brown;
+            color: white;
+        }
+
+        #clear:hover {
+            background-color: rgb(223, 52, 22);
+        }
+
+        #clear:disabled {
+            background-color: rgb(253, 193, 193);
+            cursor: not-allowed;
+        }
+
+        #clear_mode {
+            background-color: cadetblue;
+            color: white;
+        }
+
+        #clear_mode:hover {
+            background-color: rgb(51, 138, 141);
+            color: white;
+        }
+
+        #clear_mode.switched {
+            box-shadow: 0 0 10px 2px aquamarine;
+            background-color: rgb(89, 221, 177);
+        }
+
+        a {
+            color: chocolate;
+            display: block;
+        }
+
+        #download.disabled {
+            color: rgb(148, 148, 148);
+            cursor: not-allowed;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            border: 1px solid #ffa53f;
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>絵を描いてみましょうか</h1>
+    <div class="flex">
+        <div>
+            <canvas id="canvas" width="400" height="400"></canvas>
+            <a id="download" title="まずはなにかを描いてください" class="disabled" href="">描いた絵をダウンロードする</a>
+        </div>
+        <div class="editor">
+            <button id="clear" disabled>全消し</button>
+            <button id="clear_mode">消しゴムモード</button>
+            <label for="range">文字の太さ</label>
+            <div class="flex">
+                <input type="range" value="5" id="range">
+                <input type="text" value="5" id="range_output">
+            </div>
+            <div class="container">
+                <input type="color" id="color" class="field-radio">
+                <span class="container" id="color_val"></span>
+            </div>
+            <label for="file_upload" class="custom-file-upload">
+                ファイルを入れる
+            </label>
+            <input id="file_upload" type="file" />
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.querySelector("#canvas");
+        const ctx = canvas.getContext("2d");
+
+        const rangeInput = document.querySelector("#range");
+        const rangeOutputInput = document.querySelector("#range_output");
+
+        const fileUploadInput = document.querySelector("#file_upload");
+
+        const download = document.querySelector("#download");
+
+        const clearModeButton = document.querySelector("#clear_mode");
+        const clearButton = document.querySelector("#clear");
+
+        const colorInput = document.querySelector("#color");
+
+        const canvasOffsetX = canvas.offsetLeft + 10;
+        const canvasOffsetY = canvas.offsetTop;
+
+        function fillCanvas() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
+
+        fillCanvas();
+
+        const controller = {
+            isPainting: false,
+            lineWidth: 5,
+            startX: undefined,
+            startY: undefined,
+            color: "black",
+            isClearMode: false,
+            isEdited: false
+        }
+
+        let images = [];
+
+        const handleCancelClearMode = () => {
+            clearModeButton.classList.remove("switched");
+            controller.isClearMode = false;
+        }
+
+        fileUploadInput.addEventListener("change", (e) => {
+            const image = new Image();
+            image.src = URL.createObjectURL(e.target.files[0]);
+            image.onload = () => {
+                images.push({
+                    image,
+                    x: 80 * images.length,
+                    y: 10,
+                })
+            }
+            fileUploadInput.value = ""
+        })
+
+        function renderImages() {
+            images.forEach((image) => {
+                ctx.drawImage(image.image, image.x, image.y, 80, 80);
+            })
+
+            requestAnimationFrame(renderImages)
+        }
+
+        download.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (download.classList.contains("disabled")) {
+                return;
+            }
+            const image = canvas.toDataURL();
+
+            const link = document.createElement("a")
+            link.href = image;
+            link.download = "JSCanvas.png";
+            link.click();
+        })
+
+        colorInput.addEventListener("change", (e) => {
+            controller.color = e.target.value;
+            handleCancelClearMode();
+        });
+
+        clearButton.addEventListener("click", () => {
+            clearButton.setAttribute("disabled", true);
+            controller.isEdited = false;
+            download.classList.add("disabled");
+            download.setAttribute("title", "まずはなにかを描いてください");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            handleCancelClearMode();
+            fillCanvas()
+            images = [];
+        });
+
+        clearModeButton.addEventListener("click", () => {
+            clearModeButton.classList.toggle("switched");
+            controller.isClearMode = !controller.isClearMode;
+        });
+
+        rangeInput.addEventListener('change', (e) => {
+            controller.lineWidth = e.target.value;
+            rangeOutputInput.value = e.target.value;
+        });
+
+        rangeOutputInput.addEventListener('change', (e) => {
+            controller.lineWidth = e.target.value;
+            rangeInput.value = e.target.value;
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            controller.isPainting = true;
+            controller.startX = e.clientX;
+            controller.startY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', e => {
+            controller.isPainting = false;
+            ctx.stroke();
+            ctx.beginPath();
+        });
+
+        canvas.addEventListener('mousemove', draw);
+
+        function draw(e) {
+            if(!controller.isPainting) {
+                return;
+            }
+
+            controller.isEdited = true;
+            clearButton.removeAttribute("disabled");
+            download.classList.remove("disabled");
+            download.removeAttribute("title")
+
+            ctx.lineWidth = controller.lineWidth;
+            ctx.lineCap = 'round';
+
+            ctx.strokeStyle = controller.isClearMode ? "white" : controller.color;
+            ctx.lineTo(e.clientX - canvasOffsetX, e.clientY - canvasOffsetY - 8);
+            ctx.stroke();
+        }
+
+        requestAnimationFrame(renderImages)
+    </script>
+</body>
+</html>
